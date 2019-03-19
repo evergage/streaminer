@@ -1,6 +1,10 @@
 package org.streaminer.stream.frequency;
 
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
+
+import com.google.common.util.concurrent.AtomicDoubleArray;
 import org.streaminer.stream.frequency.decay.DecayFormula;
 import org.streaminer.util.hash.HashUtils;
 
@@ -14,10 +18,10 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
     public static final long PRIME_MODULUS = (1L << 31) - 1;
     private int depth;
     private int width;
-    private double[][] table;
+    private AtomicDoubleArray[] table;
     private long[] hashA;
-    private long[] timers;
-    private long size;
+    private AtomicLongArray timers;
+    private AtomicLong size;
     private double eps;
     private double confidence;
     private DecayFormula formula;
@@ -45,21 +49,26 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         initTablesWith(depth, width, seed);
     }
 
-    private TimeDecayCountMinSketch(int depth, int width, int size, long[] hashA, double[][] table) {
+    private TimeDecayCountMinSketch(int depth, int width, int size, long[] hashA, AtomicDoubleArray[] table) {
         this.depth = depth;
         this.width = width;
         this.eps   = 2.0 / width;
         this.confidence = 1 - 1 / Math.pow(2, depth);
         this.hashA = hashA;
         this.table = table;
-        this.size  = size;
+        this.size  = new AtomicLong(size);
     }
 
     private void initTablesWith(int depth, int width, int seed) {
-        this.table = new double[depth][width];
+        this.table = new AtomicDoubleArray[depth];
+        for (int i = 0; i < table.length; i++)
+        {
+            table[i] = new AtomicDoubleArray(width);
+        }
+
         this.hashA = new long[depth];
-        this.timers = new long[width];
-        
+        this.timers = new AtomicLongArray(width);
+
         Random r = new Random(seed);
         // We're using a linear hash functions
         // of the form (a*x+b) mod p.
@@ -79,7 +88,7 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
     public double getConfidence() {
         return confidence;
     }
-    
+
     private int hash(long item, int i) {
         long hash = hashA[i] * item;
         // A super fast way of computing x mod 2^p-1
@@ -90,7 +99,7 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         // Doing "%" after (int) conversion is ~2x faster than %'ing longs.
         return ((int) hash) % width;
     }
-    
+
     public void add(Object item, long qtd, long timestamp) {
         if (qtd < 0) {
             throw new IllegalArgumentException("Negative increments not implemented");
@@ -109,37 +118,52 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         int[] buckets = HashUtils.getHashBuckets((String)item, depth, width);
 
         for (int i = 0; i < depth; ++i) {
-            double quantity = 0.0;
-            if (timers[buckets[i]] <= timestamp) {
-                quantity = projectValue(timestamp, timers[buckets[i]], table[i][buckets[i]]) + qtd;
-                timers[buckets[i]] = timestamp;
-            } else {
-                quantity += projectValue(timers[buckets[i]], timestamp, qtd);
-            }
-            
-            table[i][buckets[i]] = quantity;
+            int h = buckets[i];
+
+            addHashForPosition(qtd, h, i, timestamp);
         }
-        
-        size += qtd;
+
+        size.addAndGet(qtd);
     }
-    
+
     private void addLong(long item, long qtd, long timestamp) {
         for (int i = 0; i < depth; ++i) {
             int h = hash((Long)item, i);
-            
-            double quantity = 0.0;
-            if (timers[h] <= timestamp) {
-                quantity = projectValue(timestamp, timers[h], table[i][h]) + qtd;
-                timers[h] = timestamp;
-            } else {
-                quantity += projectValue(timers[h], timestamp, qtd);
-            }
-            
-            table[i][h] = quantity;
+
+            addHashForPosition(qtd, h, i, timestamp);
         }
-        size += qtd;
+        size.addAndGet(qtd);
     }
-    
+
+    private void addHashForPosition(long qtd, int h, int i, long timestamp)
+    {
+        while (true)
+        {
+            long oldTimestamp = timers.get(h);
+
+            AtomicDoubleArray subArray = table[i];
+            if (oldTimestamp <= timestamp)
+            {
+                boolean timestampSet = timers.compareAndSet(h, oldTimestamp, timestamp);
+                if (!timestampSet)
+                {
+                    // Try again
+                    continue;
+                }
+
+                // We won this timestamp update. Now we get to reduce the old value
+                double oldCount = subArray.get(h);
+                double delta = projectValue(timestamp, oldTimestamp, oldCount) + qtd - oldCount;
+                subArray.addAndGet(h, delta);
+            }
+            else
+            {
+                subArray.addAndGet(h, projectValue(oldTimestamp, timestamp, qtd));
+            }
+            break;
+        }
+    }
+
     public double estimateCount(Object item, long timestamp) {
         if (item instanceof Integer) {
             return estimateCountLong(((Integer)item).longValue(), timestamp);
@@ -148,7 +172,7 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         } else if (item instanceof String) {
             return estimateCountString((String) item, timestamp);
         }
-        
+
         return 0d;
     }
 
@@ -156,22 +180,22 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         double res = Double.MAX_VALUE;
         int[] buckets = HashUtils.getHashBuckets((String)item, depth, width);
         for (int i = 0; i < depth; ++i) {
-            double value = projectValue(timestamp, timers[buckets[i]], table[i][buckets[i]]);
+            double value = projectValue(timestamp, timers.get(buckets[i]), table[i].get(buckets[i]));
             res = Math.min(res, value);
         }
         return res;
     }
-    
+
     private double estimateCountLong(long item, long timestamp) {
         double res = Double.MAX_VALUE;
         for (int i = 0; i < depth; ++i) {
             int h = hash((Long)item, i);
-            double value = projectValue(timestamp, timers[h], table[i][h]);
+            double value = projectValue(timestamp, timers.get(h), table[i].get(h));
             res = Math.min(res, value);
         }
         return res;
     }
-    
+
     private double projectValue(long futureTimestamp, long timestamp, double quantity) {
         if (futureTimestamp < timestamp) {
             throw new IllegalArgumentException("Cannot project decaying quantity into the past.");
@@ -181,6 +205,6 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
     }
 
     public long size() {
-        return size;
+        return size.get();
     }
 }

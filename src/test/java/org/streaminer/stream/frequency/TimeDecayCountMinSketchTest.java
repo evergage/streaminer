@@ -15,21 +15,26 @@
 package org.streaminer.stream.frequency;
 
 import org.junit.Test;
-import static org.junit.Assert.*;
-import java.util.Random;
 import org.streaminer.stream.frequency.decay.DecayFormula;
 import org.streaminer.stream.frequency.decay.ExpDecayFormula;
+
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.assertTrue;
 
 public class TimeDecayCountMinSketchTest
 {
     @Test
-    public void testAccuracy() throws FrequencyException
+    public void testAccuracyAndMultithreadedContention() throws InterruptedException, FrequencyException
     {
         int seed = 7364181;
         Random r = new Random(seed);
         int numItems = 1000000;
         int[] xs = new int[numItems];
-        int maxScale = 20;
+        int maxScale = 4;
         for (int i = 0; i < xs.length; ++i)
         {
             int scale = r.nextInt(maxScale);
@@ -40,34 +45,57 @@ public class TimeDecayCountMinSketchTest
         double confidence = 0.99;
         DecayFormula decay = new ExpDecayFormula(24 * 60 * 60);
 
-        TimeDecayCountMinSketch sketch = new TimeDecayCountMinSketch(epsOfTotalCount, confidence, seed, decay);
-        TimeDecayRealCounting<Integer> realDecay = new TimeDecayRealCounting<Integer>(decay);
-        RealCounting<Integer> real = new RealCounting<Integer>();
-        
+        final TimeDecayCountMinSketch sketch = new TimeDecayCountMinSketch(epsOfTotalCount, confidence, seed, decay);
+        final TimeDecayRealCounting<Integer> realDecay = new TimeDecayRealCounting<Integer>(decay);
+        final RealCounting<Integer> real = new RealCounting<Integer>();
+
+        int nThreads = 64;
+        ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
+
+        long start = System.nanoTime();
+
         long timestamp = 0;
-        for (int i=0; i<xs.length; i++) {
-            int x = xs[i];
+        for (int i=0; i<xs.length; i++)
+        {
+            final int x = xs[i];
             //long timestamp = System.currentTimeMillis();
-            if (i%100 == 0 && i != 0)
+            if (i % 100 == 0 && i != 0)
+            {
                 timestamp += 10000;
-            
-            sketch.add(x, 1, timestamp);
-            realDecay.add(x, 1, timestamp);
+            }
+
+            final long finalTimestamp = timestamp;
+
             real.add(x);
+            realDecay.add(x, 1, finalTimestamp);
+
+            threadPool.submit(new Runnable()
+            {
+                public void run()
+                {
+                    sketch.add(x, 1, finalTimestamp);
+                }
+            });
         }
 
+        threadPool.shutdown();
+        threadPool.awaitTermination(1, TimeUnit.MINUTES);
+
+        long duration = System.nanoTime() - start;
+
+        System.out.println("Real decay size is: " + realDecay.size() + ", time: " + TimeUnit.NANOSECONDS.toMillis(duration) + "ms");
 
         int numErrors = 0;
         for (int i = 0; i < realDecay.size(); ++i)
         {
             timestamp += 10000;//System.currentTimeMillis();
-            double ratio = 1.0 * (sketch.estimateCount(i, timestamp) - realDecay.estimateCount(i, timestamp)) / xs.length;
-            if (ratio > 1.0001)
+            double ratio = 1.0 * (Math.abs(sketch.estimateCount(i, timestamp) - realDecay.estimateCount(i, timestamp))) / realDecay.estimateCount(i, timestamp);
+            if (ratio > 0.01)
             {
                 numErrors++;
             }
-            
-            System.out.println(String.format("%d\t%d\t%f\t%f", i, real.estimateCount(i), realDecay.estimateCount(i, timestamp), sketch.estimateCount(i, timestamp)));
+
+            System.out.println(String.format("%d\t%d\t%f\t%f\t%f", i, real.estimateCount(i), realDecay.estimateCount(i, timestamp), sketch.estimateCount(i, timestamp), ratio));
         }
         double pCorrect = 1 - 1.0 * numErrors / realDecay.size();
         assertTrue("Confidence not reached: required " + confidence + ", reached " + pCorrect, pCorrect > confidence);
