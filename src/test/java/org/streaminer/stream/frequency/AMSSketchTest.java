@@ -2,7 +2,7 @@ package org.streaminer.stream.frequency;
 
 import java.util.List;
 import java.util.Random;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.streaminer.stream.frequency.AMSSketch;
 import org.junit.Test;
 import static org.junit.Assert.*;

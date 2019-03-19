@@ -2,7 +2,7 @@ package org.streaminer.stream.frequency;
 
 import java.util.Arrays;
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import org.streaminer.stream.frequency.util.CountEntry;

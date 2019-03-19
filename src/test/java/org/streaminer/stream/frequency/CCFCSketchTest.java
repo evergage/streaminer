@@ -1,7 +1,7 @@
 package org.streaminer.stream.frequency;
 
 import java.util.List;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.mahout.math.Arrays;
 import org.junit.Test;
 import static org.junit.Assert.*;

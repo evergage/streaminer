@@ -52,7 +52,7 @@ package org.streaminer.stream.membership;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
-import org.apache.hadoop.util.hash.Hash;
+import org.streaminer.util.hash.Hash;
 
 /**
  * Implements a hash object that returns a certain number of hashed values.
