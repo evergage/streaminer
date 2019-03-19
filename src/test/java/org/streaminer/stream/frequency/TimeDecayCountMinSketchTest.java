@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TimeDecayCountMinSketchTest
@@ -99,6 +100,8 @@ public class TimeDecayCountMinSketchTest
         }
         double pCorrect = 1 - 1.0 * numErrors / realDecay.size();
         assertTrue("Confidence not reached: required " + confidence + ", reached " + pCorrect, pCorrect > confidence);
+
+        assertEquals(real.size(), sketch.size());
     }
 
     /*
