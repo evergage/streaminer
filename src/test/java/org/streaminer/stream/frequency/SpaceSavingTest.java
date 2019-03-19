@@ -1,11 +1,8 @@
 package org.streaminer.stream.frequency;
 
-import cern.colt.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import org.junit.Test;
 import static org.junit.Assert.*;

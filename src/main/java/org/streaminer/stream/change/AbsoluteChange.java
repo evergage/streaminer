@@ -2,7 +2,6 @@ package org.streaminer.stream.change;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.mahout.math.Arrays;
 import org.streaminer.util.hash.HashUtils;
 
 /**
