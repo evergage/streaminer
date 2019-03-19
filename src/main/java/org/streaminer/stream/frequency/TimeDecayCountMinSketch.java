@@ -35,6 +35,7 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         this.eps = 2.0 / width;
         this.confidence = 1 - 1 / Math.pow(2, depth);
         this.formula = formula;
+        this.size = new AtomicLong();
         initTablesWith(depth, width, seed);
     }
 
@@ -46,6 +47,7 @@ public class TimeDecayCountMinSketch implements ITimeDecayFrequency<Object> {
         this.width = (int) Math.ceil(2 / epsOfTotalCount);
         this.depth = (int) Math.ceil(-Math.log(1 - confidence) / Math.log(2));
         this.formula = formula;
+        this.size = new AtomicLong();
         initTablesWith(depth, width, seed);
     }
 
