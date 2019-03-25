@@ -3,7 +3,7 @@
 
     <groupId>com.github.mayconbordin</groupId>
     <artifactId>streaminer</artifactId>
-    <version>1.2-evg1</version>
+    <version>1.2-evg2</version>
     <packaging>jar</packaging>
     <name>streaminer</name>
     <description>A collection of algorithms for mining data streams</description>
@@ -153,16 +153,19 @@
             <groupId>org.jblas</groupId>
             <artifactId>jblas</artifactId>
             <version>1.2.4</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-annotations</artifactId>
             <version>${hadoop.version}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>${hadoop.version}</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
     
