@@ -179,6 +179,7 @@
                 <configuration>
                     <useAgent>${gpgGuiPassphrase}</useAgent>
                     <keyname>${gpgKeyId}</keyname>
+                    <skip>true</skip>
                 </configuration>
                 <executions>
                     <execution>
